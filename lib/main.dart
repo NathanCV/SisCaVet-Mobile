@@ -19,37 +19,33 @@ void main() {
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-
     var routes = {
       //'/' : (context) => MinhasConsultasPage(),
-      '/Perfil' : (context) => PerfilPage(),
-      '/CadastrarAnimal' : (context) => CadastrarAnimalPage(),
-      '/CadastrarConsulta' : (context) => CadastrarConsultaPage(),
-      '/Cadastrar' : (context) => CadastrarPage(),
-      '/AlterarSenha' : (context) => AlterarSenhaPage(),
-      '/MeusAnimais' : (context) => MeusAnimaisPage(), 
-      '/Login' : (context) => LoginPage(),
-      '/ChatConsulta' : (context) => ChatConsultaPage(),
-      '/MapaClinicas' : (context) => MapaClinicasPage(), 
-      '/MinhasConsultas' : (context) => MinhasConsultasPage(), 
-      '/AlterarConsulta' : (context) => AlterarConsultaPage()
+      '/Perfil': (context) => PerfilPage(),
+      '/CadastrarAnimal': (context) => CadastrarAnimalPage(),
+      '/CadastrarConsulta': (context) => CadastrarConsultaPage(),
+      '/Cadastrar': (context) => CadastrarPage(),
+      '/AlterarSenha': (context) => AlterarSenhaPage(),
+      '/MeusAnimais': (context) => MeusAnimaisPage(),
+      '/Login': (context) => LoginPage(),
+      '/ChatConsulta': (context) => ChatConsultaPage(),
+      '/MapaClinicas': (context) => MapaClinicasPage(),
+      '/MinhasConsultas': (context) => MinhasConsultasPage(),
+      '/AlterarConsulta': (context) => AlterarConsultaPage()
     };
 
     return MaterialApp(
-        localizationsDelegates: [          
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
- supportedLocales: [
-    const Locale('pt', 'BR')
-  ],
-        title: 'Siscavet',
-        theme: ThemeData(backgroundColor: Color(0xFFFFFFFF),
-        fontFamily: 'Times New Roman'
-        ),
-        home: LoginPage(),
-        routes: routes,
+      localizationsDelegates: [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: [const Locale('pt', 'BR')],
+      title: 'Siscavet',
+      theme: ThemeData(
+          backgroundColor: Color(0xFFFFFFFF), fontFamily: 'Times New Roman'),
+      home: LoginPage(),
+      routes: routes,
     );
   }
 }

@@ -39,7 +39,7 @@ class Animal extends StatelessWidget {
                                   height: 40,
                                   width: 40,
                                 )
-                              : Image.asset(
+                              : Image.network(
                                   foto,
                                   height: 40,
                                   width: 40,

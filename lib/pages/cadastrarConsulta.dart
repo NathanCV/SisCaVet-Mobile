@@ -63,6 +63,61 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
     super.initState();
   }
 
+  void _registrar(context) async {  
+    _formKey.currentState.save(); 
+    FirebaseUser user = await FirebaseAuth.instance.currentUser();
+    
+  Firestore.instance.collection('Consultas')
+   .where("dataConsulta", isEqualTo: _dataController.value.text)
+   .where("idHorario", isEqualTo: _horario)
+   .where("idClinica", isEqualTo: _clinica).getDocuments().then(
+     (value) async {
+
+      if(value.documents.length == 0){
+      var consulta = await Firestore.instance.collection('Consultas').add(
+      {        
+        "idUsuario": user.uid,
+        "idAnimal": _animal,
+        "idClinica": _clinica,
+        "dataConsulta": _dataController.value.text,
+        "idHorario": _horario,       
+        "descricao": _descricaoController.text   
+      }); 
+
+      var urlExame = await _uploadPic(consulta.documentID);
+
+      await Firestore.instance.collection('Consultas').document(consulta.documentID).updateData({
+        "imagemExame": urlExame,        
+      }).then((value){
+        _scaffoldKey.currentState.showSnackBar(
+          SnackBar(
+            backgroundColor:  Color(0xFF1EC772),
+            content: new Text('Sucesso!'),
+            duration: new Duration(seconds: 2),
+          )
+        );
+      });
+
+      new Timer(const Duration(seconds: 2), () {
+      setState(() {
+        Navigator.of(context).pushReplacementNamed('/MinhasConsultas');   
+        });
+      });
+
+    }else{
+      _scaffoldKey.currentState.showSnackBar(
+          SnackBar(
+            backgroundColor:  Color(0xFFFA8072),
+            content: new Text('Horário não disponível! Por favor, escolha outro horário!'),
+            duration: new Duration(seconds: 5),
+          ));
+    }
+     });
+  
+    
+  }
+
+
   Future _selecionarData(context) async {
     final DateTime picked = await showDatePicker(
       context: context,
@@ -89,27 +144,6 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
       });
   }
 
-  Future _selecionarHorario(context) async {
-    final TimeOfDay picked = await showTimePicker(
-      context: context,
-      initialTime: _horarioSelecionado,
-      builder: (context, child) {
-        return Theme(          
-          data: 
-          ThemeData(
-              primarySwatch: Colors.green            
-          ),
-          child: child,
-        );
-      });
-
-    if (picked != null && picked != _horarioSelecionado)
-      setState(() {
-        _horarioSelecionado = picked;        
-        _horarioController.value = TextEditingValue(text: picked.hour.toString());
-      });
-  }
-
   // Pegando uma imagem da galeria
   Future _getImage() async {
     final image = await picker.getImage(source: ImageSource.gallery);
@@ -128,19 +162,18 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
     });
   }
 
-  //subindo a imagem para o banco
-  Future<String> _uploadPic(String uid) async {
-    if (_image != null) {
-      StorageReference firebaseStorageRef =
-          FirebaseStorage.instance.ref().child(uid);
+ //subindo a imagem animal
+  Future<String> _uploadPic(String uid) async { 
+    if(_image != null){
+      StorageReference firebaseStorageRef = FirebaseStorage.instance.ref().child(uid);
       StorageUploadTask uploadTask = firebaseStorageRef.putFile(_image);
       StorageTaskSnapshot taskSnapshot = await uploadTask.onComplete;
-      var urlImagem = await firebaseStorageRef.getDownloadURL();
-      return urlImagem;
-    } else {
+      var urlImagem = await firebaseStorageRef.getDownloadURL();      
+      return urlImagem;  
+    }else{
       return null;
-    }
-  }
+    }           
+  }  
 
   //validar campos de cadastro
   void _validarCampos(context) async {
@@ -155,7 +188,7 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
     }
 
     // validar Horario
-    if (_horarioController.value.text.isEmpty) {
+    if (_horario == null) {
       setState(() => redUnderLineHorario = true);
       setState(() => errorTextHorario = "Campo Obrigatório!");
       validacao = true;
@@ -165,7 +198,7 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
     }
 
     //validar Clinica
-    if (_clinica.isEmpty) {
+    if (_clinica == null) {
       setState(() => redUnderLineClinica = true);
       setState(() => errorTextClinica = "Campo Obrigatório!");
       validacao = true;
@@ -175,7 +208,7 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
     }    
 
     //validar Animal
-    if (_animal.isEmpty) {
+    if (_animal == null) {
       setState(() => redUnderLineAnimal = true);
       setState(() => errorTextAnimal = "Campo Obrigatório!");
       validacao = true;
@@ -186,7 +219,7 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
 
 
     if (validacao == false) {
-      //_registrar(context);
+      _registrar(context);
     }
 
     validacao = false;
@@ -199,10 +232,11 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
         errorTextDataNascimento = '';
         errorTextHorario = '';
         errorTextClinica = '';
-
+        errorTextAnimal = '';
         redUnderLineDataNascimento = false;
         redUnderLineHorario = false;
         redUnderLineClinica = false;
+        redUnderLineAnimal = false;
       });
     });
   }
@@ -313,58 +347,80 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
                       //mensagem de erro
                       Text(errorTextDataNascimento, style: TextStyle(color: Colors.red)),
 
-                      //horario consulta
-                      GestureDetector(
-                        onTap: () {
-                          _selecionarHorario(context);
-                        },
-                        child: AbsorbPointer(
-                          child: Container(
-                              margin: EdgeInsets.fromLTRB(25, 30, 25, 10),
-                              child: Column(children: [
-                                Container(
-                                    child: Material(
-                                        elevation: 2.0,
-                                        shadowColor: Colors.grey,
-                                        borderRadius: BorderRadius.all(
-                                            Radius.circular(30.0)),
-                                        child: TextFormField(
-                                          controller: _horarioController,
-                                          keyboardType: TextInputType.datetime,
+                       //horarios
+                      Container(
+                        margin: EdgeInsets.fromLTRB(25, 30, 25, 10),
+                        child: Column(children: [
+                          Container(
+                              child: Material(
+                                  elevation: 2.0,
+                                  shadowColor: Colors.grey,
+                                  borderRadius: BorderRadius.all(
+                                      Radius.circular(30.0)),
+                                  child: 
+                                  StreamBuilder<QuerySnapshot>(
+                                    stream: Firestore.instance.collection('Horarios').orderBy("ordem").snapshots(),
+                                    builder: (context, snapshot){
+                                      List<DropdownMenuItem> animaisCarregados = [];
+                                      if(!snapshot.hasData){
+                                        Text("Carregando");                            
+                                      }else{                                                       
+                                        for(int i=0; i< snapshot.data.documents.length; i++){
+                                          DocumentSnapshot snap = snapshot.data.documents[i];
+                                          animaisCarregados.add(
+                                            DropdownMenuItem(
+                                              child: 
+                                              Text(                                    
+                                                snap.data['horario'].toString(),
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: Color(0xFF000000),
+                                                  ),
+                                              ),
+                                              value: "${snap.documentID}",                                      
+                                            )
+                                          );
+                                        }
+                                      }
+
+                                      return Container(
+                                        child: 
+                                        DropdownButtonFormField(                                                                                                                         
+                                          items: animaisCarregados, 
+                                          value: _horario,                                                
+                                          onSaved: (value) => _horario = value, 
                                           decoration: InputDecoration(
-                                              prefixIcon: Icon(
-                                                  Icons.alarm,
-                                                  color: Color(0xFF969696)),
-                                              contentPadding:
-                                                  EdgeInsets.all(10.0),
-                                              border: InputBorder.none,
                                               hintText: 'Horário',
                                               hintStyle: TextStyle(
-                                                  fontSize: 14,
-                                                  color: Color(0xFF6F6D6D),
-                                                  height: 1.42),
+                                              fontSize: 14,
+                                              color: Color(0xFF6F6D6D),
+                                              height: 1.42),
                                               labelText: 'Horário',
                                               labelStyle: TextStyle(
                                                 fontSize: 14,
                                                 color: Color(0xFF969696),
                                               ),
+                                              contentPadding:
+                                              EdgeInsets.all(10.0),
+                                              border: InputBorder.none,
                                               enabledBorder: OutlineInputBorder(
-                                                borderRadius: BorderRadius.all(
-                                                    Radius.circular(30.0)),
-                                                borderSide: redUnderLineHorario
-                                                    ? BorderSide(
-                                                        color: Colors.red)
-                                                    : BorderSide(
-                                                        color:
-                                                            Colors.transparent,
-                                                        width: 2),
+                                              borderRadius: BorderRadius.all(
+                                              Radius.circular(30.0)),
+                                              borderSide: redUnderLineHorario ? BorderSide( color: Colors.red) : BorderSide( color: Colors.transparent, width: 2),
                                               )
-                                              ),
-                                          onSaved: (value) => _horario = value,
-                                        ))
+                                            ), onChanged: (value) {
+                                                setState(() {
+                                                  _horario = value;
+                                                });
+                                              },
                                         )
-                              ])),
-                        ),
+                                      );
+                                    },
+                                  ),
+                                  
+                                )
+                              )
+                        ])
                       ),
 
                       //mensagem de erro
@@ -494,7 +550,8 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
                                         return Container(
                                           child: 
                                           DropdownButtonFormField(                                                                                                                         
-                                            items: animaisCarregados,                                                 
+                                            items: animaisCarregados,
+                                            value: _animal,                                                 
                                             onSaved: (value) => _animal = value, 
                                             decoration: InputDecoration(
                                                 hintText: 'Animais',
@@ -516,7 +573,9 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
                                                 borderSide: redUnderLineAnimal ? BorderSide( color: Colors.red) : BorderSide( color: Colors.transparent, width: 2),
                                                 )
                                               ), onChanged: (value) {
-                                                  
+                                                  setState(() {
+                                                    _animal = value;
+                                                  });
                                                 },
                                           )
                                         );

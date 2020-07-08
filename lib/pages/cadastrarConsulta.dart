@@ -12,7 +12,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:datetime_picker_formfield/datetime_picker_formfield.dart';
 import 'package:intl/intl.dart';
-
+//import 'package:date_format/date_format.dart';
 
 class CadastrarConsultaPage extends StatefulWidget {
   @override
@@ -66,8 +66,12 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
   void _registrar(context) async {  
     _formKey.currentState.save(); 
     FirebaseUser user = await FirebaseAuth.instance.currentUser();
-    
-  Firestore.instance.collection('Consultas')
+
+    var animal = await Firestore.instance.collection('Animais').document(_animal).get();
+
+    var clinica = await Firestore.instance.collection('Clinicas').document(_clinica).get();
+
+    Firestore.instance.collection('Consultas')
    .where("dataConsulta", isEqualTo: _dataController.value.text)
    .where("idHorario", isEqualTo: _horario)
    .where("idClinica", isEqualTo: _clinica).getDocuments().then(
@@ -75,12 +79,15 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
 
       if(value.documents.length == 0){
       var consulta = await Firestore.instance.collection('Consultas').add(
-      {        
+      {                
         "idUsuario": user.uid,
         "idAnimal": _animal,
         "idClinica": _clinica,
+        "dataConsultaDateTime": dataSelecionada,
         "dataConsulta": _dataController.value.text,
-        "idHorario": _horario,       
+        "idHorario": _horario,
+        "clinicaNome": clinica.data["nome"],
+        "animalNome": animal.data["nomeAnimal"],    
         "descricao": _descricaoController.text   
       }); 
 
@@ -124,7 +131,7 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
       initialDate: dataSelecionada,
       firstDate: new DateTime.now(),
       lastDate: new DateTime.now().add(new Duration(days: 60)),
-            locale: Locale('pt'),
+      locale: Locale('pt'),
       builder: (context, child) {
         return Theme(          
           data: 
@@ -138,10 +145,10 @@ class _CadastrarPageState extends State<CadastrarConsultaPage> {
     if (picked != null && picked != dataSelecionada)
       setState(() {
         dataSelecionada = picked;
-        var teste =
-            DateFormat(DateFormat.YEAR_MONTH_DAY, 'pt_Br').format(picked);
+        var teste = picked.day.toString() + " / " + picked.month.toString() + " / " + picked.year.toString();
         _dataController.value = TextEditingValue(text: teste);
       });
+      
   }
 
   // Pegando uma imagem da galeria

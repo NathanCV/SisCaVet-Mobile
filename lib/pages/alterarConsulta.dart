@@ -15,13 +15,23 @@ import 'package:intl/intl.dart';
 
 class AlterarConsultaPage extends StatefulWidget {
   @override
+
+  String _idconsulta;
+
+  AlterarConsultaPage(String idConsulta){
+    this._idconsulta = idConsulta;
+  }
+
   _AlterarConsultaPageState createState() {
-    return _AlterarConsultaPageState();
+    return _AlterarConsultaPageState(_idconsulta);
   }
 }
 
 class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
   
+  _AlterarConsultaPageState(this._idConsulta);
+
+  String _idConsulta;
   FirebaseUser usuarioCarregado;
   DateTime dataSelecionada = DateTime.now();
   TimeOfDay _horarioSelecionado = TimeOfDay.now();
@@ -52,16 +62,39 @@ class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
   final _horarioController = new TextEditingController(); 
   final _descricaoController = new TextEditingController(); 
 
+  bool editarDataConsulta = false;
+  bool editarHorario = false;
+  bool editarClinica = false;
+  bool editarAnimal = false;
+  bool editarDescricao = false; 
   
-    _getUser() async {
-    usuarioCarregado = await FirebaseAuth.instance.currentUser();
+  Future<String> _getUser() async {
+  var user = await FirebaseAuth.instance.currentUser();
+  return user.uid;
+  }
+  @override
+  void initState() { 
+    _getUser();  
+    setState(() {
+      _carregarConsulta(_idConsulta);
+      super.initState(); 
+    });        
   }
 
-  @override
-  void initState() {    
-    _getUser();
-    super.initState();
+    Future _carregarConsulta(idConsulta) async {
+    setState(() async {
+       DocumentSnapshot consulta = await Firestore.instance
+       .collection('Consultas').document(idConsulta).get();
+
+      _dataController.text = consulta.data['dataConsulta'].toString();
+      _horario = consulta.data['idHorario'];
+      _clinica = consulta.data['idClinica'];
+      _animal = consulta.data['idAnimal'];
+      _descricaoController.text = consulta.data['descricao'];       
+
+    });   
   }
+
 
   Future _selecionarData(context) async {
     final DateTime picked = await showDatePicker(
@@ -86,27 +119,6 @@ class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
         var teste =
             DateFormat(DateFormat.YEAR_MONTH_DAY, 'pt_Br').format(picked);
         _dataController.value = TextEditingValue(text: teste);
-      });
-  }
-
-  Future _selecionarHorario(context) async {
-    final TimeOfDay picked = await showTimePicker(
-      context: context,
-      initialTime: _horarioSelecionado,
-      builder: (context, child) {
-        return Theme(          
-          data: 
-          ThemeData(
-              primarySwatch: Colors.green            
-          ),
-          child: child,
-        );
-      });
-
-    if (picked != null && picked != _horarioSelecionado)
-      setState(() {
-        _horarioSelecionado = picked;        
-        _horarioController.value = TextEditingValue(text: picked.hour.toString());
       });
   }
 
@@ -155,7 +167,7 @@ class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
     }
 
     // validar Horario
-    if (_horarioController.value.text.isEmpty) {
+    if (_horario.isEmpty) {
       setState(() => redUnderLineHorario = true);
       setState(() => errorTextHorario = "Campo Obrigatório!");
       validacao = true;
@@ -186,7 +198,7 @@ class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
 
 
     if (validacao == false) {
-      //_registrar(context);
+      _registrar(context);
     }
 
     validacao = false;
@@ -205,6 +217,71 @@ class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
         redUnderLineClinica = false;
       });
     });
+  }
+
+  void _registrar(context) async {  
+    _formKey.currentState.save(); 
+    FirebaseUser user = await FirebaseAuth.instance.currentUser();
+
+    var animal = await Firestore.instance.collection('Animais').document(_animal).get();
+
+    var clinica = await Firestore.instance.collection('Clinicas').document(_clinica).get();
+
+    Firestore.instance.collection('Consultas')
+   .where("dataConsulta", isEqualTo: _dataController.value.text)
+   .where("idHorario", isEqualTo: _horario)
+   .where("idClinica", isEqualTo: _clinica)   
+   .getDocuments().then(
+     (value) async {
+
+      if(value.documents.length == 0){
+      var consulta = await Firestore.instance.collection('Consultas').document(_idConsulta).updateData(
+      {                
+        "idUsuario": user.uid,
+        "idAnimal": _animal,
+        "idClinica": _clinica,
+        "dataConsultaDateTime": dataSelecionada,
+        "dataConsulta": _dataController.value.text,
+        "idHorario": _horario,
+        "clinicaNome": clinica.data["nome"],
+        "animalNome": animal.data["nomeAnimal"],    
+        "descricao": _descricaoController.text   
+      }); 
+
+      var urlExame = await _uploadPic(_idConsulta);
+
+      await Firestore.instance.collection('Consultas').document(_idConsulta).updateData({
+        "imagemExame": urlExame,        
+      }).then((value){
+        _scaffoldKey.currentState.showSnackBar(
+          SnackBar(
+            backgroundColor:  Color(0xFF1EC772),
+            content: new Text('Sucesso!'),
+            duration: new Duration(seconds: 2),
+          )
+        );
+      });
+
+      new Timer(const Duration(seconds: 2), () {
+      setState(() {
+        Navigator.of(context).pushReplacementNamed('/MinhasConsultas');   
+        });
+      });
+
+    }else{
+
+      if(value.documents[0].data["idAnimal"] != _animal){
+        _scaffoldKey.currentState.showSnackBar(
+          SnackBar(
+            backgroundColor:  Color(0xFFFA8072),
+            content: new Text('Horário não disponível! Por favor, escolha outro horário!'),
+            duration: new Duration(seconds: 5),
+          ));
+      }      
+    }
+     });
+  
+    
   }
 
   @override
@@ -277,18 +354,25 @@ class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
                                     child: 
                                     GestureDetector(
                                       onTap: () {
-                                        _selecionarData(context);
+                                        if(editarDataConsulta){
+                                          _selecionarData(context);
+                                        }else{
+                                          null;
+                                        }
                                       },
                                       child: AbsorbPointer(
                                         child: Container(
                                             child: Column(children: [
                                               Container(
                                                   child: Material(
-                                                      elevation: 2.0,
+                                                      elevation: editarDataConsulta == false ? 0 : 2.0,
                                                       shadowColor: Colors.grey,
                                                       borderRadius: BorderRadius.all(
                                                           Radius.circular(30.0)),
                                                       child: TextFormField(
+                                                        enabled: editarDataConsulta == false
+                                                          ? false
+                                                          : true,
                                                         controller: _dataController,
                                                         keyboardType: TextInputType.datetime,
                                                         decoration: InputDecoration(
@@ -327,12 +411,16 @@ class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
                                 ),
                               ),
                               Container(
-                                margin: EdgeInsets.fromLTRB(0, 25, 5, 0),
+                                margin: EdgeInsets.fromLTRB(0, 0, 5, 0),
                                 child: IconButton(
                                 icon: Icon(Icons.edit),
                                 color: Colors.black,
                                 iconSize: 24.0, 
-                                onPressed: () {  }                          
+                                onPressed: () {
+                                    setState(() {
+                                      editarDataConsulta = !editarDataConsulta;
+                                    });
+                                  },                          
                                 ),
                               )
 
@@ -349,67 +437,89 @@ class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
                                 margin: EdgeInsets.fromLTRB(25, 0, 15, 10),
                                 child: SizedBox(
                                     width: 250,    
-                                    child: GestureDetector(
-                                    onTap: () {
-                                      _selecionarHorario(context);
-                                    },
-                                    child: AbsorbPointer(
-                                      child: Container(
-                                          //margin: EdgeInsets.fromLTRB(0, 30, 25, 10),
-                                          child: Column(children: [
-                                            Container(
-                                          child: Material(
-                                              elevation: 2.0,
-                                              shadowColor: Colors.grey,
-                                              borderRadius: BorderRadius.all(
-                                                  Radius.circular(30.0)),
-                                              child: TextFormField(
-                                                controller: _horarioController,
-                                                keyboardType: TextInputType.datetime,
-                                                decoration: InputDecoration(
-                                                    prefixIcon: Icon(
-                                                        Icons.alarm,
-                                                        color: Color(0xFF969696)),
-                                                    contentPadding:
-                                                        EdgeInsets.all(10.0),
-                                                    border: InputBorder.none,
-                                                    hintText: 'Horário',
-                                                    hintStyle: TextStyle(
+                                    child:  
+                                      Container(
+                                        child: Material(
+                                            elevation: editarHorario == false ? 0 : 2.0,
+                                            shadowColor: Colors.grey,
+                                            borderRadius: BorderRadius.all(
+                                                Radius.circular(30.0)),
+                                            child: 
+                                            StreamBuilder<QuerySnapshot>(
+                                              stream: Firestore.instance.collection('Horarios').orderBy("ordem").snapshots(),
+                                              builder: (context, snapshot){
+                                                List<DropdownMenuItem> horariosCarregados = [];
+                                                if(!snapshot.hasData){
+                                                  Text("Carregando");                            
+                                                }else{                                                       
+                                                  for(int i=0; i< snapshot.data.documents.length; i++){
+                                                    DocumentSnapshot snap = snapshot.data.documents[i];
+                                                    horariosCarregados.add(
+                                                      DropdownMenuItem(
+                                                        child: 
+                                                        Text(                                    
+                                                          snap.data['horario'].toString(),
+                                                          style: TextStyle(
+                                                            fontSize: 14,
+                                                            color: Color(0xFF000000),
+                                                            ),
+                                                        ),
+                                                        value: "${snap.documentID}",                                      
+                                                      )
+                                                    );
+                                                  }
+                                                }
+
+                                                return Container(
+                                                  child: 
+                                                  DropdownButtonFormField(                                                                                                                                                   
+                                                    items: horariosCarregados, 
+                                                    value: _horario,                                                
+                                                    onSaved: (value) => _horario = value, 
+                                                    decoration: InputDecoration(
+                                                        hintText: 'Horário',
+                                                        hintStyle: TextStyle(
                                                         fontSize: 14,
                                                         color: Color(0xFF6F6D6D),
                                                         height: 1.42),
-                                                    labelText: 'Horário',
-                                                    labelStyle: TextStyle(
-                                                      fontSize: 14,
-                                                      color: Color(0xFF969696),
-                                                    ),
-                                                    enabledBorder: OutlineInputBorder(
-                                                      borderRadius: BorderRadius.all(
-                                                          Radius.circular(30.0)),
-                                                      borderSide: redUnderLineHorario
-                                                          ? BorderSide(
-                                                              color: Colors.red)
-                                                          : BorderSide(
-                                                              color:
-                                                                  Colors.transparent,
-                                                              width: 2),
-                                                    )
-                                                    ),
-                                                onSaved: (value) => _horario = value,
-                                              ))
-                                              )
-                                    ])),
-                              ),
-                            ),
+                                                        labelText: 'Horário',
+                                                        labelStyle: TextStyle(
+                                                          fontSize: 14,
+                                                          color: Color(0xFF969696),
+                                                        ),
+                                                        contentPadding:
+                                                        EdgeInsets.all(10.0),
+                                                        border: InputBorder.none,
+                                                        enabledBorder: OutlineInputBorder(
+                                                        borderRadius: BorderRadius.all(
+                                                        Radius.circular(30.0)),
+                                                        borderSide: redUnderLineHorario ? BorderSide( color: Colors.red) : BorderSide( color: Colors.transparent, width: 2),
+                                                        )
+                                                      ), onChanged: (value) {
+                                                          setState(() {
+                                                            _horario = value;
+                                                          });
+                                                        },
+                                                  )
+                                                );
+                                              },
+                                            ),
+                                            
+                                          )
+                                        )
                                 ),
                               ),
                               Container(
-                                margin: EdgeInsets.fromLTRB(0, 25, 5, 0),
+                                margin: EdgeInsets.fromLTRB(0, 0, 5, 0),
                                 child: IconButton(
                                 icon: Icon(Icons.edit),
                                 color: Colors.black,
                                 iconSize: 24.0, 
-                                onPressed: () {  }                          
+                                onPressed: () {
+                                    setState(() {
+                                      editarHorario = !editarHorario;
+                                    });
+                                  },                          
                                 ),
                               )
 
@@ -428,85 +538,88 @@ class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
                                     width: 250,    
                                     child:  
                                       Container(
-                                        //margin: EdgeInsets.fromLTRB(25, 30, 25, 10),
-                                        child: Column(children: [
-                                          Container(
-                                              child: Material(
-                                                  elevation: 2.0,
-                                                  shadowColor: Colors.grey,
-                                                  borderRadius: BorderRadius.all(
-                                                      Radius.circular(30.0)),
-                                                  child: 
-                                                  StreamBuilder<QuerySnapshot>(
-                                                    stream: Firestore.instance.collection('Clinicas').snapshots(),
-                                                    builder: (context, snapshot){
-                                                      List<DropdownMenuItem> animaisCarregados = [];
-                                                      if(!snapshot.hasData){
-                                                        Text("Carregando");                            
-                                                      }else{                                                       
-                                                        for(int i=0; i< snapshot.data.documents.length; i++){
-                                                          DocumentSnapshot snap = snapshot.data.documents[i];
-                                                          animaisCarregados.add(
-                                                            DropdownMenuItem(
-                                                              child: 
-                                                              Text(                                    
-                                                                snap.data['nome'].toString(),
-                                                                style: TextStyle(
-                                                                  fontSize: 14,
-                                                                  color: Color(0xFF000000),
-                                                                  ),
-                                                              ),
-                                                              value: "${snap.documentID}",                                      
-                                                            )
-                                                          );
-                                                        }
-                                                      }
-
-                                                      return Container(
+                                        child: Material(
+                                            elevation: editarClinica == false ? 0 : 2.0,
+                                            shadowColor: Colors.grey,
+                                            borderRadius: BorderRadius.all(
+                                                Radius.circular(30.0)),
+                                            child: 
+                                            StreamBuilder<QuerySnapshot>(
+                                              stream: Firestore.instance.collection('Clinicas').snapshots(),
+                                              builder: (context, snapshot){
+                                                List<DropdownMenuItem> animaisCarregados = [];
+                                                if(!snapshot.hasData){
+                                                  Text("Carregando");                            
+                                                }else{                                                       
+                                                  for(int i=0; i< snapshot.data.documents.length; i++){
+                                                    DocumentSnapshot snap = snapshot.data.documents[i];
+                                                    animaisCarregados.add(
+                                                      DropdownMenuItem(
                                                         child: 
-                                                        DropdownButtonFormField(                                                                                                                         
-                                                          items: animaisCarregados,                                                 
-                                                          onSaved: (value) => _clinica = value, 
-                                                          decoration: InputDecoration(
-                                                              hintText: 'Clínica Veterinária',
-                                                              hintStyle: TextStyle(
-                                                              fontSize: 14,
-                                                              color: Color(0xFF6F6D6D),
-                                                              height: 1.42),
-                                                              labelText: 'Clínica Veterinária',
-                                                              labelStyle: TextStyle(
-                                                                fontSize: 14,
-                                                                color: Color(0xFF969696),
-                                                              ),
-                                                              contentPadding:
-                                                              EdgeInsets.all(10.0),
-                                                              border: InputBorder.none,
-                                                              enabledBorder: OutlineInputBorder(
-                                                              borderRadius: BorderRadius.all(
-                                                              Radius.circular(30.0)),
-                                                              borderSide: redUnderLineClinica ? BorderSide( color: Colors.red) : BorderSide( color: Colors.transparent, width: 2),
-                                                              )
-                                                            ), onChanged: (value) {
-                                                                
-                                                              },
+                                                        Text(                                    
+                                                          snap.data['nome'].toString(),
+                                                          style: TextStyle(
+                                                            fontSize: 14,
+                                                            color: Color(0xFF000000),
+                                                            ),
+                                                        ),
+                                                        value: "${snap.documentID}",                                      
+                                                      )
+                                                    );
+                                                  }
+                                                }
+
+                                                return Container(
+                                                  child: 
+                                                  DropdownButtonFormField(                                                                                                                         
+                                                    items: animaisCarregados, 
+                                                    value: _clinica,                                                
+                                                    onSaved: (value) => _clinica = value, 
+                                                    decoration: InputDecoration(
+                                                        hintText: 'Clínica Veterinária',
+                                                        hintStyle: TextStyle(
+                                                        fontSize: 14,
+                                                        color: Color(0xFF6F6D6D),
+                                                        height: 1.42),
+                                                        labelText: 'Clínica Veterinária',
+                                                        labelStyle: TextStyle(
+                                                          fontSize: 14,
+                                                          color: Color(0xFF969696),
+                                                        ),
+                                                        contentPadding:
+                                                        EdgeInsets.all(10.0),
+                                                        border: InputBorder.none,
+                                                        enabledBorder: OutlineInputBorder(
+                                                        borderRadius: BorderRadius.all(
+                                                        Radius.circular(30.0)),
+                                                        borderSide: redUnderLineClinica ? BorderSide( color: Colors.red) : BorderSide( color: Colors.transparent, width: 2),
                                                         )
-                                                      );
-                                                    },
-                                                  ),
-                                                  
-                                                )
-                                              )
-                                        ])
+                                                      ), onChanged: (value) {
+                                                          setState(() {
+                                                            _clinica = value;
+                                                          });
+                                                        },
+                                                  )
+                                                );
+                                              },
+                                            ),
+                                            
+                                          )
+                                        )
+                        
                                       ),
-                                ),
                               ), 
                               Container(
-                                margin: EdgeInsets.fromLTRB(0, 25, 5, 0),
+                                margin: EdgeInsets.fromLTRB(0, 0, 5, 0),
                                 child: IconButton(
                                 icon: Icon(Icons.edit),
                                 color: Colors.black,
                                 iconSize: 24.0, 
-                                onPressed: () {  }                          
+                                onPressed: () {
+                                    setState(() {
+                                      editarClinica = !editarClinica;
+                                    });
+                                  },                          
                                 ),
                               )
 
@@ -521,90 +634,103 @@ class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
                             children: <Widget>[
                               Container(
                                 margin: EdgeInsets.fromLTRB(25, 0, 15, 10),
-                                child: SizedBox(
+                                child: 
+                                SizedBox(
                                     width: 250,    
                                     child:  
-                                        Container(
-                                          //margin: EdgeInsets.fromLTRB(25, 30, 25, 10),
-                                          child: Column(children: [
-                                            Container(
-                                                child: Material(
-                                                    elevation: 2.0,
-                                                    shadowColor: Colors.grey,
-                                                    borderRadius: BorderRadius.all(
-                                                        Radius.circular(30.0)),
-                                                    child: 
-                                                    StreamBuilder<QuerySnapshot>(
-                                                      stream: Firestore.instance.collection('Animais').snapshots(),
-                                                      builder: (context, snapshot){
-                                                        List<DropdownMenuItem> animaisCarregados = [];
-                                                        if(!snapshot.hasData){
-                                                          Text("Carregando");                            
-                                                        }else{                                                       
-                                                          for(int i=0; i< snapshot.data.documents.length; i++){
-                                                            DocumentSnapshot snap = snapshot.data.documents[i];
-                                                            animaisCarregados.add(
-                                                              DropdownMenuItem(
-                                                                child: 
-                                                                Text(                                    
-                                                                  snap.data['nomeAnimal'].toString(),
-                                                                  style: TextStyle(
-                                                                    fontSize: 14,
-                                                                    color: Color(0xFF000000),
-                                                                    ),
-                                                                ),
-                                                                value: "${snap.documentID}",                                      
-                                                              )
-                                                            );
-                                                          }
-                                                        }
-
-                                                        return Container(
+                                       Container(
+                                        child: Material(
+                                            elevation: editarAnimal == false ? 0 : 2.0,
+                                            shadowColor: Colors.grey,
+                                            borderRadius: BorderRadius.all(
+                                                Radius.circular(30.0)),
+                                            child: 
+                                            FutureBuilder(
+                                              future: _getUser(),
+                                              builder: (_, snapshot) {
+                                                if(!snapshot.hasData) {
+                                                  return CircularProgressIndicator();
+                                                }else{
+                                                  return StreamBuilder<QuerySnapshot>(                                        
+                                                stream: Firestore.instance.collection('Animais').where('idUsuario', isEqualTo: snapshot.data).snapshots(),                                      
+                                                builder: (context, snapshot){                                        
+                                                  List<DropdownMenuItem> animaisCarregados = [];
+                                                  if(!snapshot.hasData){
+                                                    Text("Carregando");                            
+                                                  }else{                                                       
+                                                    for(int i=0; i< snapshot.data.documents.length; i++){
+                                                      DocumentSnapshot snap = snapshot.data.documents[i];
+                                                      animaisCarregados.add(
+                                                        DropdownMenuItem(
                                                           child: 
-                                                          DropdownButtonFormField(                                                                                                                         
-                                                            items: animaisCarregados,                                                 
-                                                            onSaved: (value) => _animal = value, 
-                                                            decoration: InputDecoration(
-                                                                hintText: 'Animais',
-                                                                hintStyle: TextStyle(
-                                                                fontSize: 14,
-                                                                color: Color(0xFF6F6D6D),
-                                                                height: 1.42),
-                                                                labelText: 'Animais',
-                                                                labelStyle: TextStyle(
-                                                                  fontSize: 14,
-                                                                  color: Color(0xFF969696),
-                                                                ),
-                                                                contentPadding:
-                                                                EdgeInsets.all(10.0),
-                                                                border: InputBorder.none,
-                                                                enabledBorder: OutlineInputBorder(
-                                                                borderRadius: BorderRadius.all(
-                                                                Radius.circular(30.0)),
-                                                                borderSide: redUnderLineAnimal ? BorderSide( color: Colors.red) : BorderSide( color: Colors.transparent, width: 2),
-                                                                )
-                                                              ), onChanged: (value) {
-                                                                  
-                                                                },
-                                                          )
-                                                        );
-                                                      },
-                                                    ),
-                                                    
-                                                  )
-                                                )
-                                          ])
-                                        ),
+                                                          Text(                                    
+                                                            snap.data['nomeAnimal'].toString(),
+                                                            style: TextStyle(
+                                                              fontSize: 14,
+                                                              color: Color(0xFF000000),
+                                                              ),
+                                                          ),
+                                                          value: "${snap.documentID}",                                      
+                                                        )
+                                                      );
+                                                    }
+                                                  }
 
-                                       ),
+                                                  return Container(
+                                                    child: 
+                                                    DropdownButtonFormField(                                                                                                                         
+                                                      items: animaisCarregados,
+                                                      value: _animal,                                                 
+                                                      onSaved: (value) => _animal = value, 
+                                                      decoration: InputDecoration(
+                                                          hintText: 'Animais',
+                                                          hintStyle: TextStyle(
+                                                          fontSize: 14,
+                                                          color: Color(0xFF6F6D6D),
+                                                          height: 1.42),
+                                                          labelText: 'Animais',
+                                                          labelStyle: TextStyle(
+                                                            fontSize: 14,
+                                                            color: Color(0xFF969696),
+                                                          ),
+                                                          contentPadding:
+                                                          EdgeInsets.all(10.0),
+                                                          border: InputBorder.none,
+                                                          enabledBorder: OutlineInputBorder(
+                                                          borderRadius: BorderRadius.all(
+                                                          Radius.circular(30.0)),
+                                                          borderSide: redUnderLineAnimal ? BorderSide( color: Colors.red) : BorderSide( color: Colors.transparent, width: 2),
+                                                          )
+                                                        ), onChanged: (value) {
+                                                            setState(() {
+                                                              _animal = value;
+                                                            });
+                                                          },
+                                                    )
+                                                  );
+                                                },
+                                              );
+                                              
+                                                }
+                                              }
+                                            ),
+                                              
+                                          )
+                                        )
+                                
+                                ),
                               ), 
                               Container(
-                                margin: EdgeInsets.fromLTRB(0, 25, 5, 0),
+                                margin: EdgeInsets.fromLTRB(0, 0, 5, 0),
                                 child: IconButton(
                                 icon: Icon(Icons.edit),
                                 color: Colors.black,
                                 iconSize: 24.0, 
-                                onPressed: () {  }                          
+                                onPressed: () {
+                                    setState(() {
+                                      editarAnimal = !editarAnimal;
+                                    });
+                                  },                          
                                 ),
                               )
 
@@ -620,10 +746,13 @@ class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
                                     width: 250,    
                                     child: Form(                        
                                     child: Material (                          
-                                      elevation: 2.0,
+                                      elevation: editarDescricao == false ? 0 : 2.0,
                                       shadowColor: Colors.grey,
                                       borderRadius: BorderRadius.all(Radius.circular(30.0)),
                                       child: TextFormField(
+                                        enabled: editarDescricao == false
+                                                          ? false
+                                                          : true,
                                         controller: _descricaoController,
                                         onSaved: (value) => _descricao = value, 
                                         keyboardType: TextInputType.multiline,
@@ -657,7 +786,11 @@ class _AlterarConsultaPageState extends State<AlterarConsultaPage> {
                                 icon: Icon(Icons.edit),
                                 color: Colors.black,
                                 iconSize: 24.0, 
-                                onPressed: () {  }, 
+                                onPressed: () {
+                                    setState(() {
+                                      editarDescricao = !editarDescricao;
+                                    });
+                                  }, 
                                 //semanticLabel: 'Text to announce in accessibility modes',
                                 ),
                               )

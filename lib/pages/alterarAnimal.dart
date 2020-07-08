@@ -12,13 +12,23 @@ import 'package:path_provider/path_provider.dart';
 
 class AlterarAnimalPage extends StatefulWidget {
   @override
+
+  String _idAnimal;
+
+  AlterarAnimalPage(String idAnimal){
+    this._idAnimal = idAnimal;
+  }
+
   _AlterarAnimalPageState createState() {
-    return _AlterarAnimalPageState();
+    return _AlterarAnimalPageState(_idAnimal);
   }
 }
 
 class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
-  
+
+  _AlterarAnimalPageState(this._idAnimal);
+
+  String _idAnimal;
   String _nomeAnimal;
   String _especie;
   String _raca;
@@ -43,12 +53,38 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
   bool redUnderLineRaca = false;
   bool redUnderLineIdade = false;
 
-
   final _nomeAnimalController = TextEditingController();
   final _especieController = TextEditingController();
   final _racaController = TextEditingController();
   final _idadeController = TextEditingController();
   final _descricaoController = TextEditingController();
+
+  bool editarNomeAnimal = false;
+  bool editarEspecie = false;
+  bool editarRaca = false;
+  bool editarIdade = false;
+  bool editarDescricao = false;  
+
+   //carregar dados do usuario
+  Future _carregarAnimal(idAnimal) async {
+    setState(() async {
+       DocumentSnapshot animal = await Firestore.instance
+       .collection('Animais').document(idAnimal).get();
+
+      _nomeAnimalController.text = animal.data['nomeAnimal'];
+      _especieController.text = animal.data['especie'];
+      _racaController.text = animal.data['raca'];
+      _idadeController.text = animal.data['idade'];
+      _descricaoController.text = animal.data['descricao'];    
+
+    });   
+  }
+
+  @override
+  void initState() {
+    super.initState();    
+    _carregarAnimal(_idAnimal);
+  }
 
   // Pegando uma imagem da galeria
   Future _getImage2() async{
@@ -175,42 +211,70 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
       }           
     }  
 
-
   void _registrar() async {  
     _formKey.currentState.save(); 
     FirebaseUser user = await FirebaseAuth.instance.currentUser();
-    var urlImagemAnimal = await _uploadPicImagemAnimal(user.uid);
-    var urlCarteirinhaVacinacao = await _uploadPicCarteirinhaVacinacao(user.uid);
+    
+    await Firestore.instance.collection('Animais').document(_idAnimal).updateData(
+      {        
+        "idUsuario": user.uid,
+        "nomeAnimal": _nomeAnimalController.text,
+        "especie": _especieController.text,
+        "raca": _racaController.text,
+        "idade": _idadeController.text,       
+        "descricao": _descricaoController.text   
+      }); 
 
-    await Firestore.instance.collection('Usuarios').document(user.uid).updateData(
-      {
-        "Animal": {
-          "imagemAnimal": urlImagemAnimal,
-          "nomeAnimal": _nomeAnimalController.text,
-          "especie": _especieController.text,
-          "raca": _racaController.text,
-          "idade": _idadeController.text,       
-          "descricao": _descricaoController.text,
-          "carteirinhaVacinacao": urlCarteirinhaVacinacao
-        }                     
-      }).then((value)
-      {
+      var urlImagemAnimal = await _uploadPicImagemAnimal(_idAnimal);
+      var urlCarteirinhaVacinacao = await _uploadPicCarteirinhaVacinacao(_idAnimal);
+
+      await Firestore.instance.collection('Animais').document(_idAnimal).updateData({
+        "imagemAnimal": urlImagemAnimal,
+        "carteirinhaVacinacao": urlCarteirinhaVacinacao
+      }).then((value){
         _scaffoldKey.currentState.showSnackBar(
           SnackBar(
             backgroundColor:  Color(0xFF1EC772),
-            content: new Text('Cadastrado com Sucesso!'),
+            content: new Text('Sucesso!'),
             duration: new Duration(seconds: 2),
           )
-        ); 
+        );  
 
       new Timer(const Duration(seconds: 2), () {
       setState(() {
-        Navigator.of(context).pushReplacementNamed('/MinhasConsultas');   
+        Navigator.of(context).pushReplacementNamed('/MeusAnimais');   
         });
       });
-  });
-}
 
+      }).catchError((onError){
+        _scaffoldKey.currentState.showSnackBar(
+          SnackBar(
+            backgroundColor:  Color(0xFFFA8072),
+            content: new Text('Erro!'),
+            duration: new Duration(seconds: 5),
+          ));
+      });
+  }
+
+  void _deletarAnimal() async {
+    Firestore.instance.collection('Consultas')
+   .where("idAnimal", isEqualTo: _idAnimal).getDocuments().then(
+     (value){
+       if(value.documents.length == 0){
+         Firestore.instance.collection('Animais').document(_idAnimal).delete();
+         Navigator.of(context).pushReplacementNamed('/MeusAnimais');
+       }else{
+        _scaffoldKey.currentState.showSnackBar(
+          SnackBar(
+            backgroundColor:  Color(0xFFFA8072),
+            content: new Text('Impossivel excluir animal com consulta marcada!'),
+            duration: new Duration(seconds: 5),
+          ));
+    }
+     }
+
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -308,10 +372,13 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
                                     width: 250,    
                                     child: Form(                        
                                     child: Material (                          
-                                      elevation: 2.0,
+                                      elevation: editarNomeAnimal == false ? 0 : 2.0,
                                       shadowColor: Colors.grey,
                                       borderRadius: BorderRadius.all(Radius.circular(30.0)),
-                                      child: TextFormField(                                         
+                                      child: TextFormField( 
+                                        enabled: editarNomeAnimal == false
+                                              ? false
+                                              : true,                                        
                                         controller: _nomeAnimalController,
                                         inputFormatters: [
                                           LengthLimitingTextInputFormatter(100),
@@ -345,7 +412,11 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
                                 icon: Icon(Icons.edit),
                                 color: Colors.black,
                                 iconSize: 24.0, 
-                                onPressed: () {  }                          
+                                onPressed: () {
+                                    setState(() {
+                                      editarNomeAnimal = !editarNomeAnimal;
+                                    });
+                                  },                         
                                 ),
                               )
 
@@ -364,10 +435,13 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
                                     width: 250,    
                                     child: Form(                        
                                     child: Material (                          
-                                      elevation: 2.0,
+                                      elevation: editarEspecie == false ? 0 : 2.0,
                                       shadowColor: Colors.grey,
                                       borderRadius: BorderRadius.all(Radius.circular(30.0)),
                                       child: TextFormField(
+                                        enabled: editarEspecie == false
+                                              ? false
+                                              : true,
                                         onSaved: (value) => _especie = value, 
                                         controller: _especieController,
                                         inputFormatters: [
@@ -401,9 +475,12 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
                                 child: IconButton(
                                 icon: Icon(Icons.edit),
                                 color: Colors.black,
-                                iconSize: 24.0, 
-                                onPressed: () {  }, 
-                                //semanticLabel: 'Text to announce in accessibility modes',
+                                iconSize: 24.0,
+                                onPressed: () {
+                                    setState(() {
+                                      editarEspecie = !editarEspecie;
+                                    });
+                                  }, 
                                 ),
                               )
 
@@ -422,10 +499,13 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
                                     width: 250,    
                                     child: Form(                        
                                     child: Material (                          
-                                      elevation: 2.0,
+                                      elevation: editarRaca == false ? 0 : 2.0,
                                       shadowColor: Colors.grey,
                                       borderRadius: BorderRadius.all(Radius.circular(30.0)),
                                       child: TextFormField(
+                                        enabled: editarRaca == false
+                                              ? false
+                                              : true,
                                         onSaved: (value) => _raca = value, 
                                         controller: _racaController,
                                         inputFormatters: [
@@ -460,8 +540,11 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
                                 icon: Icon(Icons.edit),
                                 color: Colors.black,
                                 iconSize: 24.0, 
-                                onPressed: () {  }, 
-                                //semanticLabel: 'Text to announce in accessibility modes',
+                                onPressed: () {
+                                    setState(() {
+                                      editarRaca = !editarRaca;
+                                    });
+                                  },
                                 ),
                               )
 
@@ -480,10 +563,13 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
                                     width: 250,    
                                     child: Form(                        
                                     child: Material (                          
-                                      elevation: 2.0,
+                                      elevation: editarIdade == false ? 0 : 2.0,
                                       shadowColor: Colors.grey,
                                       borderRadius: BorderRadius.all(Radius.circular(30.0)),
                                       child: TextFormField(
+                                        enabled: editarIdade == false
+                                              ? false
+                                              : true,
                                         onSaved: (value) => _idade = value, 
                                         controller: _idadeController,
                                         inputFormatters: [
@@ -519,9 +605,11 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
                                 icon: Icon(Icons.edit),
                                 color: Colors.black,
                                 iconSize: 24.0, 
-                                onPressed: () {  }, 
-                                //semanticLabel: 'Text to announce in accessibility modes',
-                                ),
+                                onPressed: () {
+                                    setState(() {
+                                      editarIdade = !editarIdade;
+                                    });
+                                  },),
                               )
 
                             ],
@@ -539,10 +627,13 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
                                     width: 250,    
                                     child: Form(                        
                                     child: Material (                          
-                                      elevation: 2.0,
+                                      elevation: editarDescricao == false ? 0 : 2.0,
                                       shadowColor: Colors.grey,
                                       borderRadius: BorderRadius.all(Radius.circular(30.0)),
                                       child: TextFormField(
+                                        enabled: editarDescricao == false
+                                              ? false
+                                              : true,
                                         controller: _descricaoController,
                                         onSaved: (value) => _descricao = value, 
                                         keyboardType: TextInputType.multiline,
@@ -575,9 +666,12 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
                                 child: IconButton(
                                 icon: Icon(Icons.edit),
                                 color: Colors.black,
-                                iconSize: 24.0, 
-                                onPressed: () {  }, 
-                                //semanticLabel: 'Text to announce in accessibility modes',
+                                iconSize: 24.0,
+                                onPressed: () {
+                                    setState(() {
+                                      editarDescricao = !editarDescricao;
+                                    });
+                                  }, 
                                 ),
                               )
 
@@ -613,7 +707,7 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
                                 ), 
                               )
                               : Container(
-                                height: 100,
+                                //height: 100,
                                 margin: EdgeInsets.fromLTRB(50, 10, 50, 5),
                                 //width: 100,
                                 decoration: BoxDecoration(
@@ -642,33 +736,95 @@ class _AlterarAnimalPageState extends State<AlterarAnimalPage> {
                       ),
                     ),
 
-                    GestureDetector(
-                      onTap: (){  
-                        //_registrar();
-                        _validarCampos(); 
-                        _tempoExibicaoMensagemErro(context);          
-                      },
-                        child: Container(
-                            margin: EdgeInsets.fromLTRB(25, 50, 25, 50),
-                            child: Material(
-                              elevation: 2.0,
-                              shadowColor: Colors.grey,
-                              color: Color(0xFF1EC772),
-                              borderRadius: BorderRadius.all(Radius.circular(30.0)),
-                              child: OutlineButton(
-                                child: Text('Salvar', style: TextStyle(
-                                  color: Colors.white
+                   Container(
+                      margin: EdgeInsets.fromLTRB(25, 50, 25, 0),
+                      child: Row(
+                          children: <Widget>[
+                          //voltar
+                          SizedBox(
+                            width: 150,
+                            child: GestureDetector(
+                              onTap: (){  
+                                setState(() {
+                                  Navigator.of(context).pushReplacementNamed('/MeusAnimais');   
+                                });       
+                              },
+                                child: Container(
+                                    margin: EdgeInsets.fromLTRB(25, 0, 25, 50),
+                                    child: Material(
+                                      elevation: 2.0,
+                                      shadowColor: Colors.grey,
+                                      color: Color(0xFFFA8072),
+                                      borderRadius: BorderRadius.all(Radius.circular(30.0)),
+                                      child: OutlineButton(
+                                        child: Text('Voltar', style: TextStyle(
+                                          color: Colors.white
+                                        ),
+                                        ), 
+                                        onPressed: null,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(30.0),                                                                   
+                                          ), 
+                                        disabledBorderColor: Colors.transparent,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                                ), 
-                                onPressed: null,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(30.0),                                                                   
-                                  ), 
-                                disabledBorderColor: Colors.transparent,
-                              ),
-                            ),
                           ),
+ 
+                          SizedBox(
+                            width: 150,
+                            child: GestureDetector(
+                              onTap: (){  
+                                _validarCampos(); 
+                                _tempoExibicaoMensagemErro(context);          
+                              },
+                                child: Container(
+                                    margin: EdgeInsets.fromLTRB(25, 0, 25, 50),
+                                    child: Material(
+                                      elevation: 2.0,
+                                      shadowColor: Colors.grey,
+                                      color: Color(0xFF1EC772),
+                                      borderRadius: BorderRadius.all(Radius.circular(30.0)),
+                                      child: OutlineButton(
+                                        child: Text('Salvar', style: TextStyle(
+                                          color: Colors.white
+                                        ),
+                                        ), 
+                                        onPressed: null,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(30.0),                                                                   
+                                          ), 
+                                        disabledBorderColor: Colors.transparent,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                          ),
+
+                          
+                        ],
+                      ),
+                    ),
+                  
+                   //deletar consulta
+                    Container(
+                      margin: EdgeInsets.fromLTRB(25, 0, 25, 20),
+                      child: GestureDetector(
+                          onTap: (){
+                            _deletarAnimal();
+                          },
+                          child: Text('Deletar Animal', 
+                          style: TextStyle(
+                            color: Color(0xFF648365),
+                            decoration: TextDecoration.underline,
+                            fontSize: 16
+                          )
                         ),
+                      ),
+                    ),
+                     
+                  
                   ]
                 )
               )

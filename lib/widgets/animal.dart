@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:siscavet/pages/alterarAnimal.dart';
 
 class Animal extends StatelessWidget {
+  final String idAnimal;
   final String foto;
   final String nome;
   final String especie;
   final String consulta;
 
-  Animal(this.foto, this.nome, this.especie, this.consulta);
+  Animal(this.idAnimal, this.foto, this.nome, this.especie, this.consulta);
 
   @override
   Widget build(BuildContext context) {
@@ -14,12 +16,15 @@ class Animal extends StatelessWidget {
         child: Column(children: [
       GestureDetector(
           onTap: () {
-            print("Click no animal 1");
+            Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => AlterarAnimalPage(idAnimal)
+                ));
           },
           child: Container(
               color: Colors.white,
               width: MediaQuery.of(context).size.width,
-              margin: EdgeInsets.fromLTRB(14, 14, 0, 0),
+              margin: EdgeInsets.fromLTRB(14, 0, 0, 0),
               child:
                   Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
                 //Foto
@@ -33,17 +38,17 @@ class Animal extends StatelessWidget {
                     child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          foto == null
-                              ? Image.asset(
+                          //foto == null ?
+                              Image.asset(
                                   'assets/images/Galeria.png',
                                   height: 40,
                                   width: 40,
                                 )
-                              : Image.asset(
-                                  foto,
-                                  height: 40,
-                                  width: 40,
-                                )
+                              //: NetworkImage(
+                               //   foto,
+                                  //height: 40,
+                                  //width: 40,
+                               // )
                         ])),
 
                 //Dados
@@ -121,7 +126,7 @@ class Animal extends StatelessWidget {
         height: 1,
         width: MediaQuery.of(context).size.width,
         color: Colors.black12,
-        margin: EdgeInsets.fromLTRB(5, 14, 5, 0),
+        margin: EdgeInsets.fromLTRB(5, 14, 5, 14),
       ),
     ]));
   }
